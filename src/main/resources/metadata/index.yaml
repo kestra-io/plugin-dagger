@@ -1,7 +1,7 @@
 group: io.kestra.plugin.template
-name: "template"
-title: "Template"
-description: "Plugin template for Kestra"
+name: "dagger"
+title: "Dagger"
+description: "Plugin Dagger for Kestra"
 body: ""
 videos: []
 createdBy: "Kestra Core Team"
