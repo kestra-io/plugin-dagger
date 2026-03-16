@@ -81,33 +81,37 @@ public class Script extends Task implements RunnableTask<Script.Output> {
         }
 
         Path scriptFile = runContext.workingDir().createTempFile(".dagger");
-        Files.writeString(scriptFile, renderedScript, StandardCharsets.UTF_8);
-        runContext.logger().info("Executing Dagger script from {}", scriptFile);
+        try {
+            Files.writeString(scriptFile, renderedScript, StandardCharsets.UTF_8);
+            runContext.logger().info("Executing Dagger script from {}", scriptFile);
 
-        DaggerCliExecutor.ExecutionResult result = DaggerCliExecutor.execute(
-            runContext,
-            List.of(DaggerCliExecutor.daggerBinary(), "run", scriptFile.toAbsolutePath().toString()),
-            renderedContainerImage
-        );
-
-        if (result.exitCode() != 0) {
-            runContext.logger().error("Dagger script failed with exit code {}", result.exitCode());
-            throw new RunnableTaskException(
-                "Dagger script failed with exit code " + result.exitCode(),
-                Output.builder()
-                    .exitCode(result.exitCode())
-                    .stdout(result.stdout())
-                    .stderr(result.stderr())
-                    .build()
+            DaggerCliExecutor.ExecutionResult result = DaggerCliExecutor.execute(
+                runContext,
+                List.of(DaggerCliExecutor.daggerBinary(), "run", scriptFile.toAbsolutePath().toString()),
+                renderedContainerImage
             );
-        }
 
-        runContext.logger().info("Dagger script completed with exit code {}", result.exitCode());
-        return Output.builder()
-            .exitCode(result.exitCode())
-            .stdout(result.stdout())
-            .stderr(result.stderr())
-            .build();
+            if (result.exitCode() != 0) {
+                runContext.logger().error("Dagger script failed with exit code {}", result.exitCode());
+                throw new RunnableTaskException(
+                    "Dagger script failed with exit code " + result.exitCode(),
+                    Output.builder()
+                        .exitCode(result.exitCode())
+                        .stdout(result.stdout())
+                        .stderr(result.stderr())
+                        .build()
+                );
+            }
+
+            runContext.logger().info("Dagger script completed with exit code {}", result.exitCode());
+            return Output.builder()
+                .exitCode(result.exitCode())
+                .stdout(result.stdout())
+                .stderr(result.stderr())
+                .build();
+        } finally {
+            Files.deleteIfExists(scriptFile);
+        }
     }
 
     @Builder
