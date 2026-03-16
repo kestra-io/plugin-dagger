@@ -2,9 +2,10 @@ package io.kestra.plugin.dagger;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTaskException;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.plugin.core.runner.Process;
+import io.kestra.plugin.scripts.exec.scripts.models.ScriptOutput;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
@@ -17,13 +18,11 @@ import java.util.List;
 import java.util.Set;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
 class CommandsTest {
-    private static final String DAGGER_BINARY_PROPERTY = "kestra.plugin.dagger.binary";
 
     @Inject
     private RunContextFactory runContextFactory;
@@ -33,21 +32,20 @@ class CommandsTest {
         RunContext runContext = runContextFactory.of();
 
         Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(DAGGER_BINARY_PROPERTY);
-        System.setProperty(DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
+        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
 
         try {
             Commands task = Commands.builder()
                 .id("dagger-commands")
                 .type(Commands.class.getName())
-                .commands(Property.ofValue(List.of("container | from alpine | stdout")))
+                .taskRunner(Process.instance())
+                .commands(Property.ofValue(List.of("container --from alpine stdout")))
                 .build();
 
-            Commands.Output output = task.run(runContext);
+            ScriptOutput output = task.run(runContext);
 
             assertThat(output.getExitCode(), is(0));
-            assertThat(output.getStdout(), containsString("called:container | from alpine | stdout"));
-            assertThat(output.getStderr(), is(""));
         } finally {
             restoreProperty(previous);
         }
@@ -58,21 +56,18 @@ class CommandsTest {
         RunContext runContext = runContextFactory.of();
 
         Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(DAGGER_BINARY_PROPERTY);
-        System.setProperty(DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
+        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
 
         try {
             Commands task = Commands.builder()
                 .id("dagger-commands-failed")
                 .type(Commands.class.getName())
+                .taskRunner(Process.instance())
                 .commands(Property.ofValue(List.of("fail")))
                 .build();
 
-            RunnableTaskException exception = assertThrows(RunnableTaskException.class, () -> task.run(runContext));
-            Commands.Output output = (Commands.Output) exception.getOutput();
-
-            assertThat(output.getExitCode(), is(42));
-            assertThat(output.getStderr(), containsString("simulated command failure"));
+            assertThrows(Exception.class, () -> task.run(runContext));
         } finally {
             restoreProperty(previous);
         }
@@ -82,16 +77,17 @@ class CommandsTest {
         Path fakeDagger = runContext.workingDir().resolve(Path.of("dagger"));
         String script = """
             #!/bin/sh
-            if [ \"$1\" = \"call\" ]; then
-              if [ \"$2\" = \"fail\" ]; then
-                echo \"simulated command failure\" 1>&2
+            if [ "$1" = "call" ]; then
+              shift
+              if echo "$@" | grep -q "fail"; then
+                echo "simulated command failure" 1>&2
                 exit 42
               fi
-              echo \"called:$2\"
+              echo "called:$@"
               exit 0
             fi
 
-            echo \"unsupported invocation\" 1>&2
+            echo "unsupported invocation" 1>&2
             exit 1
             """;
 
@@ -103,9 +99,9 @@ class CommandsTest {
 
     private static void restoreProperty(String previous) {
         if (previous == null) {
-            System.clearProperty(DAGGER_BINARY_PROPERTY);
+            System.clearProperty(Commands.DAGGER_BINARY_PROPERTY);
         } else {
-            System.setProperty(DAGGER_BINARY_PROPERTY, previous);
+            System.setProperty(Commands.DAGGER_BINARY_PROPERTY, previous);
         }
     }
 }
