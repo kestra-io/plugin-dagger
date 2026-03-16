@@ -61,7 +61,9 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
 
     @Schema(
         title = "Container image",
-        description = "Container image for Docker-compatible task runners."
+        description = "Container image used when the task runner is Docker-based. " +
+            "Must include the Dagger CLI when using a Docker task runner. " +
+            "Ignored when using the Process task runner."
     )
     @Builder.Default
     private Property<String> containerImage = Property.ofValue("docker.io/library/alpine:latest");
