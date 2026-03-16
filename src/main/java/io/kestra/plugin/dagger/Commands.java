@@ -41,6 +41,8 @@ import java.util.List;
                 tasks:
                   - id: run_dagger_pipeline
                     type: io.kestra.plugin.dagger.Commands
+                    taskRunner:
+                      type: io.kestra.plugin.core.runner.Process
                     commands:
                       - container --from alpine with-exec --args echo,Hello stdout
                 """
@@ -54,7 +56,8 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
     @Schema(
         title = "Dagger pipeline commands",
         description = "List of pipeline expressions passed to `dagger call`. " +
-            "Each entry is shell-quoted and executed as `dagger call '<pipeline>'`."
+            "Each entry is shell-quoted to prevent interpretation of special characters " +
+            "(e.g., `|` is passed literally to the Dagger CLI, not interpreted as a shell pipe)."
     )
     @NotNull
     private Property<List<String>> commands;

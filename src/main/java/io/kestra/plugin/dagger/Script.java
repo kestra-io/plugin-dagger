@@ -43,6 +43,8 @@ import java.util.List;
                 tasks:
                   - id: run_dagger_script
                     type: io.kestra.plugin.dagger.Script
+                    taskRunner:
+                      type: io.kestra.plugin.core.runner.Process
                     script: |
                       container |
                       from alpine |
