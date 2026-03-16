@@ -4,9 +4,9 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
-import io.kestra.core.models.tasks.RunnableTaskException;
-import io.kestra.core.models.tasks.Task;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.scripts.exec.AbstractExecScript;
+import io.kestra.plugin.scripts.exec.scripts.models.ScriptOutput;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -16,16 +16,18 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @SuperBuilder
 @ToString
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = true)
 @Getter
 @NoArgsConstructor
 @Schema(
     title = "Run Dagger CLI pipelines from inline commands.",
-    description = "Executes each pipeline in `commands` using `dagger call <pipeline>` via the Process task runner. Stdout and stderr are captured and returned."
+    description = "Executes each pipeline using `dagger call <pipeline>` via the configured task runner. " +
+        "Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."
 )
 @Plugin(
     examples = {
@@ -40,91 +42,64 @@ import java.util.List;
                   - id: run_dagger_pipeline
                     type: io.kestra.plugin.dagger.Commands
                     commands:
-                      - container | from alpine | with-exec echo \"Hello\" | stdout
+                      - container --from alpine with-exec --args echo,Hello stdout
                 """
         )
     }
 )
-public class Commands extends Task implements RunnableTask<Commands.Output> {
+public class Commands extends AbstractExecScript implements RunnableTask<ScriptOutput> {
+
+    static final String DAGGER_BINARY_PROPERTY = "kestra.plugin.dagger.binary";
+
     @Schema(
         title = "Dagger pipeline commands",
-        description = "List of pipeline expressions executed one by one using `dagger call <pipeline>`."
+        description = "List of pipeline expressions passed to `dagger call`. " +
+            "Each entry is shell-quoted and executed as `dagger call '<pipeline>'`."
     )
     @NotNull
-    protected Property<List<String>> commands;
+    private Property<List<String>> commands;
 
     @Schema(
         title = "Container image",
-        description = "Optional container image hint kept for consistency with script plugins. When using the Process runner, this value is informational and does not change local CLI execution."
+        description = "Container image for Docker-compatible task runners."
     )
-    protected Property<String> containerImage;
+    @Builder.Default
+    private Property<String> containerImage = Property.ofValue("docker.io/library/alpine:latest");
 
     @Override
-    public Output run(RunContext runContext) throws Exception {
-        List<String> renderedCommands = runContext.render(this.commands).asList(String.class);
-        String renderedContainerImage = this.containerImage == null
-            ? null
-            : runContext.render(this.containerImage).as(String.class).orElse(null);
-
-        if (renderedCommands == null || renderedCommands.isEmpty()) {
-            throw new RunnableTaskException("The `commands` property must contain at least one pipeline command.");
-        }
-
-        if (renderedContainerImage != null && !renderedContainerImage.isBlank()) {
-            runContext.logger().debug("Configured containerImage='{}' (informational with Process runner)", renderedContainerImage);
-        }
-
-        StringBuilder stdout = new StringBuilder();
-        StringBuilder stderr = new StringBuilder();
-
-        for (String pipeline : renderedCommands) {
-            runContext.logger().info("Executing Dagger command: dagger call {}", pipeline);
-            DaggerCliExecutor.ExecutionResult result = DaggerCliExecutor.execute(
-                runContext,
-                List.of(DaggerCliExecutor.daggerBinary(), "call", pipeline),
-                renderedContainerImage
-            );
-
-            DaggerCliExecutor.append(stdout, result.stdout());
-            DaggerCliExecutor.append(stderr, result.stderr());
-
-            if (result.exitCode() != 0) {
-                runContext.logger().error("Dagger command failed with exit code {}", result.exitCode());
-                throw new RunnableTaskException(
-                    "Dagger command failed with exit code " + result.exitCode(),
-                    Output.builder()
-                        .exitCode(result.exitCode())
-                        .stdout(stdout.toString())
-                        .stderr(stderr.toString())
-                        .build()
-                );
-            }
-        }
-
-        runContext.logger().info("All Dagger commands completed successfully");
-        return Output.builder()
-            .exitCode(0)
-            .stdout(stdout.toString())
-            .stderr(stderr.toString())
-            .build();
+    public Property<String> getContainerImage() {
+        return this.containerImage;
     }
 
-    @Builder
-    @Getter
-    public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(
-            title = "Process exit code"
-        )
-        private final Integer exitCode;
+    @Override
+    public ScriptOutput run(RunContext runContext) throws Exception {
+        List<String> renderedCommands = runContext.render(this.commands).asList(String.class);
 
-        @Schema(
-            title = "Captured standard output"
-        )
-        private final String stdout;
+        String binary = daggerBinary();
+        List<String> daggerCommands = new ArrayList<>();
+        for (String pipeline : renderedCommands) {
+            // Shell-quote the pipeline to prevent interpretation of special characters (e.g. |)
+            daggerCommands.add(binary + " call " + shellQuote(pipeline));
+        }
 
-        @Schema(
-            title = "Captured standard error"
-        )
-        private final String stderr;
+        return this.commands(runContext)
+            .withInterpreter(this.getInterpreter())
+            .withBeforeCommands(this.getBeforeCommands())
+            .withBeforeCommandsWithOptions(true)
+            .withCommands(Property.ofValue(daggerCommands))
+            .run();
+    }
+
+    static String daggerBinary() {
+        return System.getProperty(DAGGER_BINARY_PROPERTY, "dagger");
+    }
+
+    /**
+     * Single-quote a string for safe shell interpolation.
+     * Handles embedded single quotes by ending the quoted segment,
+     * inserting an escaped quote, and restarting.
+     */
+    static String shellQuote(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
     }
 }
