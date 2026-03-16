@@ -76,7 +76,6 @@ public class Commands extends Task implements RunnableTask<Commands.Output> {
 
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
-        Integer exitCode = 0;
 
         for (String pipeline : renderedCommands) {
             runContext.logger().info("Executing Dagger command: dagger call {}", pipeline);
@@ -88,7 +87,6 @@ public class Commands extends Task implements RunnableTask<Commands.Output> {
 
             DaggerCliExecutor.append(stdout, result.stdout());
             DaggerCliExecutor.append(stderr, result.stderr());
-            exitCode = result.exitCode();
 
             if (result.exitCode() != 0) {
                 runContext.logger().error("Dagger command failed with exit code {}", result.exitCode());
@@ -103,9 +101,9 @@ public class Commands extends Task implements RunnableTask<Commands.Output> {
             }
         }
 
-        runContext.logger().info("Dagger commands completed with exit code {}", exitCode);
+        runContext.logger().info("All Dagger commands completed successfully");
         return Output.builder()
-            .exitCode(exitCode)
+            .exitCode(0)
             .stdout(stdout.toString())
             .stderr(stderr.toString())
             .build();
