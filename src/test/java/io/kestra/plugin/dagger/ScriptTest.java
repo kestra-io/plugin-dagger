@@ -12,9 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.Set;
+import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -28,64 +27,53 @@ class ScriptTest {
 
     @Test
     void runScript() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
+        createFakeDagger(runContext);
 
-        Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
-        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        var task = Script.builder()
+            .id("dagger-script")
+            .type(Script.class.getName())
+            .taskRunner(Process.instance())
+            .env(Property.ofValue(Map.of("PATH", runContext.workingDir().path().toAbsolutePath() + ":" + System.getenv("PATH"))))
+            .script(Property.ofValue("""
+                container |
+                from alpine |
+                stdout
+                """))
+            .build();
 
-        try {
-            Script task = Script.builder()
-                .id("dagger-script")
-                .type(Script.class.getName())
-                .taskRunner(Process.instance())
-                .script(Property.ofValue("""
-                    container |
-                    from alpine |
-                    stdout
-                    """))
-                .build();
+        var output = task.run(runContext);
 
-            ScriptOutput output = task.run(runContext);
-
-            assertThat(output.getExitCode(), is(0));
-        } finally {
-            restoreProperty(previous);
-        }
+        assertThat(output.getExitCode(), is(0));
     }
 
     @Test
     void runScriptFailure() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
+        createFakeDagger(runContext);
 
-        Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
-        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        var task = Script.builder()
+            .id("dagger-script-failed")
+            .type(Script.class.getName())
+            .taskRunner(Process.instance())
+            .env(Property.ofValue(Map.of("PATH", runContext.workingDir().path().toAbsolutePath() + ":" + System.getenv("PATH"))))
+            .script(Property.ofValue("FAIL_SCRIPT"))
+            .build();
 
-        try {
-            Script task = Script.builder()
-                .id("dagger-script-failed")
-                .type(Script.class.getName())
-                .taskRunner(Process.instance())
-                .script(Property.ofValue("FAIL_SCRIPT"))
-                .build();
-
-            assertThrows(Exception.class, () -> task.run(runContext));
-        } finally {
-            restoreProperty(previous);
-        }
+        assertThrows(Exception.class, () -> task.run(runContext));
     }
 
-    private static Path createFakeDagger(RunContext runContext) throws Exception {
-        Path fakeDagger = runContext.workingDir().resolve(Path.of("dagger"));
-        String script = """
+    private static void createFakeDagger(RunContext runContext) throws Exception {
+        var fakeDagger = runContext.workingDir().resolve(Path.of("dagger"));
+        var script = """
             #!/bin/sh
-            if [ "$1" = "run" ]; then
-              if grep -q "FAIL_SCRIPT" "$2"; then
+            if [ "$1" = "shell" ]; then
+              INPUT=$(cat)
+              if echo "$INPUT" | grep -q "FAIL_SCRIPT"; then
                 echo "simulated script failure" 1>&2
                 exit 7
               fi
-              cat "$2"
+              echo "$INPUT"
               exit 0
             fi
 
@@ -94,16 +82,6 @@ class ScriptTest {
             """;
 
         Files.writeString(fakeDagger, script, StandardCharsets.UTF_8);
-        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-xr-x");
-        Files.setPosixFilePermissions(fakeDagger, perms);
-        return fakeDagger;
-    }
-
-    private static void restoreProperty(String previous) {
-        if (previous == null) {
-            System.clearProperty(Commands.DAGGER_BINARY_PROPERTY);
-        } else {
-            System.setProperty(Commands.DAGGER_BINARY_PROPERTY, previous);
-        }
+        Files.setPosixFilePermissions(fakeDagger, PosixFilePermissions.fromString("rwxr-xr-x"));
     }
 }
