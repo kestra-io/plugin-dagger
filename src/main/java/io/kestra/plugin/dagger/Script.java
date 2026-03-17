@@ -28,8 +28,9 @@ import java.util.List;
 @NoArgsConstructor
 @Schema(
     title = "Run a Dagger CLI script.",
-    description = "Writes the inline script to a temporary file and pipes it as stdin to `dagger shell` " +
-        "via the configured task runner."
+    description = """
+        Writes the inline script to a temporary file and pipes it as stdin to `dagger shell` \
+        via the configured task runner."""
 )
 @Plugin(
     examples = {
@@ -65,9 +66,10 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
 
     @Schema(
         title = "Container image",
-        description = "Container image used when the task runner is Docker-based. " +
-            "Must include the Dagger CLI when using a Docker task runner. " +
-            "Ignored when using the Process task runner."
+        description = """
+            Container image used when the task runner is Docker-based. \
+            Must include the Dagger CLI when using a Docker task runner. \
+            Ignored when using the Process task runner."""
     )
     @Builder.Default
     private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
@@ -79,13 +81,13 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
 
     @Override
     public ScriptOutput run(RunContext runContext) throws Exception {
-        var renderedScript = runContext.render(this.script).as(String.class).orElse(null);
-        if (renderedScript == null || renderedScript.isBlank()) {
+        var rScript = runContext.render(this.script).as(String.class).orElse(null);
+        if (rScript == null || rScript.isBlank()) {
             throw new IllegalArgumentException("The `script` property must not be empty.");
         }
 
         var scriptFile = runContext.workingDir().createTempFile(".dagger");
-        Files.writeString(scriptFile, renderedScript, StandardCharsets.UTF_8);
+        Files.writeString(scriptFile, rScript, StandardCharsets.UTF_8);
 
         return this.commands(runContext)
             .withInterpreter(this.getInterpreter())

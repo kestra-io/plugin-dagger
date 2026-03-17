@@ -27,8 +27,9 @@ import java.util.List;
 @NoArgsConstructor
 @Schema(
     title = "Run Dagger CLI pipelines from inline commands.",
-    description = "Executes each pipeline using `dagger shell -c '<pipeline>'` via the configured task runner. " +
-        "Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."
+    description = """
+        Executes each pipeline using `dagger shell -c '<pipeline>'` via the configured task runner. \
+        Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."""
 )
 @Plugin(
     examples = {
@@ -62,18 +63,20 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
 
     @Schema(
         title = "Dagger pipeline commands",
-        description = "List of pipeline expressions passed to `dagger shell -c`. " +
-            "Each entry is shell-quoted to prevent interpretation of special characters " +
-            "(e.g., `|` is passed literally to the Dagger CLI, not interpreted as a shell pipe)."
+        description = """
+            List of pipeline expressions passed to `dagger shell -c`. \
+            Each entry is shell-quoted to prevent interpretation of special characters \
+            (e.g., `|` is passed literally to the Dagger CLI, not interpreted as a shell pipe)."""
     )
     @NotNull
     private Property<List<String>> commands;
 
     @Schema(
         title = "Container image",
-        description = "Container image used when the task runner is Docker-based. " +
-            "Must include the Dagger CLI when using a Docker task runner. " +
-            "Ignored when using the Process task runner."
+        description = """
+            Container image used when the task runner is Docker-based. \
+            Must include the Dagger CLI when using a Docker task runner. \
+            Ignored when using the Process task runner."""
     )
     @Builder.Default
     private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
@@ -85,10 +88,10 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
 
     @Override
     public ScriptOutput run(RunContext runContext) throws Exception {
-        var renderedCommands = runContext.render(this.commands).asList(String.class);
+        var rCommands = runContext.render(this.commands).asList(String.class);
 
         var daggerCommands = new ArrayList<String>();
-        for (var pipeline : renderedCommands) {
+        for (var pipeline : rCommands) {
             // Shell-quote the pipeline to prevent interpretation of special characters (e.g. |)
             daggerCommands.add("dagger shell -c " + shellQuote(pipeline));
         }
