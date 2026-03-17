@@ -28,7 +28,7 @@ import java.util.List;
 @NoArgsConstructor
 @Schema(
     title = "Run a Dagger CLI script.",
-    description = "Writes the inline script to a temporary file and executes it using `dagger run <file>` " +
+    description = "Writes the inline script to a temporary file and pipes it as stdin to `dagger shell` " +
         "via the configured task runner."
 )
 @Plugin(
@@ -58,7 +58,7 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
 
     @Schema(
         title = "Inline Dagger script",
-        description = "Script content written to a temporary file and executed with `dagger run`."
+        description = "Script content written to a temporary file and piped as stdin to `dagger shell`."
     )
     @NotNull
     private Property<String> script;
@@ -70,7 +70,7 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
             "Ignored when using the Process task runner."
     )
     @Builder.Default
-    private Property<String> containerImage = Property.ofValue("docker.io/library/alpine:latest");
+    private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
 
     @Override
     public Property<String> getContainerImage() {
@@ -79,21 +79,20 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
 
     @Override
     public ScriptOutput run(RunContext runContext) throws Exception {
-        String renderedScript = runContext.render(this.script).as(String.class).orElse(null);
+        var renderedScript = runContext.render(this.script).as(String.class).orElse(null);
         if (renderedScript == null || renderedScript.isBlank()) {
             throw new IllegalArgumentException("The `script` property must not be empty.");
         }
 
-        Path scriptFile = runContext.workingDir().createTempFile(".dagger");
+        var scriptFile = runContext.workingDir().createTempFile(".dagger");
         Files.writeString(scriptFile, renderedScript, StandardCharsets.UTF_8);
 
-        String binary = Commands.daggerBinary();
         return this.commands(runContext)
             .withInterpreter(this.getInterpreter())
-            .withBeforeCommands(this.getBeforeCommands())
+            .withBeforeCommands(Property.ofValue(Commands.mergedBeforeCommands(this.getBeforeCommands(), runContext)))
             .withBeforeCommandsWithOptions(true)
             .withCommands(Property.ofValue(List.of(
-                binary + " run " + scriptFile.toAbsolutePath()
+                "dagger shell < " + scriptFile.toAbsolutePath()
             )))
             .run();
     }

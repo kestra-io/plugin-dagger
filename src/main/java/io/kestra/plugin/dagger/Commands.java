@@ -17,6 +17,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @SuperBuilder
@@ -26,7 +27,7 @@ import java.util.List;
 @NoArgsConstructor
 @Schema(
     title = "Run Dagger CLI pipelines from inline commands.",
-    description = "Executes each pipeline using `dagger call <pipeline>` via the configured task runner. " +
+    description = "Executes each pipeline using `dagger shell -c '<pipeline>'` via the configured task runner. " +
         "Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."
 )
 @Plugin(
@@ -44,18 +45,24 @@ import java.util.List;
                     taskRunner:
                       type: io.kestra.plugin.core.runner.Process
                     commands:
-                      - container --from alpine with-exec --args echo,Hello stdout
+                      - container | from alpine | with-exec echo Hello | stdout
                 """
         )
     }
 )
 public class Commands extends AbstractExecScript implements RunnableTask<ScriptOutput> {
 
-    static final String DAGGER_BINARY_PROPERTY = "kestra.plugin.dagger.binary";
+    /**
+     * Commands that install the Dagger CLI if it is not already on PATH.
+     * Expects {@code curl} to be available in the container image.
+     */
+    static final List<String> DAGGER_INSTALL_COMMANDS = List.of(
+        "command -v dagger > /dev/null 2>&1 || curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sh > /dev/null 2>&1"
+    );
 
     @Schema(
         title = "Dagger pipeline commands",
-        description = "List of pipeline expressions passed to `dagger call`. " +
+        description = "List of pipeline expressions passed to `dagger shell -c`. " +
             "Each entry is shell-quoted to prevent interpretation of special characters " +
             "(e.g., `|` is passed literally to the Dagger CLI, not interpreted as a shell pipe)."
     )
@@ -69,7 +76,7 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
             "Ignored when using the Process task runner."
     )
     @Builder.Default
-    private Property<String> containerImage = Property.ofValue("docker.io/library/alpine:latest");
+    private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
 
     @Override
     public Property<String> getContainerImage() {
@@ -78,25 +85,31 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
 
     @Override
     public ScriptOutput run(RunContext runContext) throws Exception {
-        List<String> renderedCommands = runContext.render(this.commands).asList(String.class);
+        var renderedCommands = runContext.render(this.commands).asList(String.class);
 
-        String binary = daggerBinary();
-        List<String> daggerCommands = new ArrayList<>();
-        for (String pipeline : renderedCommands) {
+        var daggerCommands = new ArrayList<String>();
+        for (var pipeline : renderedCommands) {
             // Shell-quote the pipeline to prevent interpretation of special characters (e.g. |)
-            daggerCommands.add(binary + " call " + shellQuote(pipeline));
+            daggerCommands.add("dagger shell -c " + shellQuote(pipeline));
         }
 
         return this.commands(runContext)
             .withInterpreter(this.getInterpreter())
-            .withBeforeCommands(this.getBeforeCommands())
+            .withBeforeCommands(Property.ofValue(mergedBeforeCommands(this.getBeforeCommands(), runContext)))
             .withBeforeCommandsWithOptions(true)
             .withCommands(Property.ofValue(daggerCommands))
             .run();
     }
 
-    static String daggerBinary() {
-        return System.getProperty(DAGGER_BINARY_PROPERTY, "dagger");
+    /**
+     * Merges the Dagger install commands with any user-provided beforeCommands.
+     * Install commands run first to ensure the Dagger CLI is available.
+     */
+    static List<String> mergedBeforeCommands(Property<List<String>> userBeforeCommands, RunContext runContext) throws Exception {
+        var merged = new ArrayList<>(DAGGER_INSTALL_COMMANDS);
+        var userBefore = runContext.render(userBeforeCommands).asList(String.class);
+        merged.addAll(userBefore);
+        return Collections.unmodifiableList(merged);
     }
 
     /**

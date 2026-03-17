@@ -12,10 +12,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -29,56 +28,44 @@ class CommandsTest {
 
     @Test
     void runCommands() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
+        createFakeDagger(runContext);
 
-        Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
-        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        var task = Commands.builder()
+            .id("dagger-commands")
+            .type(Commands.class.getName())
+            .taskRunner(Process.instance())
+            .env(Property.ofValue(Map.of("PATH", runContext.workingDir().path().toAbsolutePath() + ":" + System.getenv("PATH"))))
+            .commands(Property.ofValue(List.of("container --from alpine stdout")))
+            .build();
 
-        try {
-            Commands task = Commands.builder()
-                .id("dagger-commands")
-                .type(Commands.class.getName())
-                .taskRunner(Process.instance())
-                .commands(Property.ofValue(List.of("container --from alpine stdout")))
-                .build();
+        var output = task.run(runContext);
 
-            ScriptOutput output = task.run(runContext);
-
-            assertThat(output.getExitCode(), is(0));
-        } finally {
-            restoreProperty(previous);
-        }
+        assertThat(output.getExitCode(), is(0));
     }
 
     @Test
     void runCommandsFailure() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
+        createFakeDagger(runContext);
 
-        Path fakeDagger = createFakeDagger(runContext);
-        String previous = System.getProperty(Commands.DAGGER_BINARY_PROPERTY);
-        System.setProperty(Commands.DAGGER_BINARY_PROPERTY, fakeDagger.toAbsolutePath().toString());
+        var task = Commands.builder()
+            .id("dagger-commands-failed")
+            .type(Commands.class.getName())
+            .taskRunner(Process.instance())
+            .env(Property.ofValue(Map.of("PATH", runContext.workingDir().path().toAbsolutePath() + ":" + System.getenv("PATH"))))
+            .commands(Property.ofValue(List.of("fail")))
+            .build();
 
-        try {
-            Commands task = Commands.builder()
-                .id("dagger-commands-failed")
-                .type(Commands.class.getName())
-                .taskRunner(Process.instance())
-                .commands(Property.ofValue(List.of("fail")))
-                .build();
-
-            assertThrows(Exception.class, () -> task.run(runContext));
-        } finally {
-            restoreProperty(previous);
-        }
+        assertThrows(Exception.class, () -> task.run(runContext));
     }
 
-    private static Path createFakeDagger(RunContext runContext) throws Exception {
-        Path fakeDagger = runContext.workingDir().resolve(Path.of("dagger"));
-        String script = """
+    private static void createFakeDagger(RunContext runContext) throws Exception {
+        var fakeDagger = runContext.workingDir().resolve(Path.of("dagger"));
+        var script = """
             #!/bin/sh
-            if [ "$1" = "call" ]; then
-              shift
+            if [ "$1" = "shell" ] && [ "$2" = "-c" ]; then
+              shift 2
               if echo "$@" | grep -q "fail"; then
                 echo "simulated command failure" 1>&2
                 exit 42
@@ -92,16 +79,6 @@ class CommandsTest {
             """;
 
         Files.writeString(fakeDagger, script, StandardCharsets.UTF_8);
-        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-xr-x");
-        Files.setPosixFilePermissions(fakeDagger, perms);
-        return fakeDagger;
-    }
-
-    private static void restoreProperty(String previous) {
-        if (previous == null) {
-            System.clearProperty(Commands.DAGGER_BINARY_PROPERTY);
-        } else {
-            System.setProperty(Commands.DAGGER_BINARY_PROPERTY, previous);
-        }
+        Files.setPosixFilePermissions(fakeDagger, PosixFilePermissions.fromString("rwxr-xr-x"));
     }
 }
