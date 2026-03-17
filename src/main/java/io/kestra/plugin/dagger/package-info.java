@@ -1,7 +1,7 @@
 @PluginSubGroup(
     title = "Dagger",
     description = "Run Dagger CLI pipelines from Kestra workflows.",
-    categories = PluginSubGroup.PluginCategory.TOOL
+    categories = PluginSubGroup.PluginCategory.CORE
 )
 package io.kestra.plugin.dagger;
 
