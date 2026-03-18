@@ -1,7 +1,7 @@
 group: io.kestra.plugin.dagger
 name: "dagger"
 title: "Dagger"
-description: "Plugin Dagger for Kestra"
+description: "Tasks that run Dagger pipelines, commands, and scripts from Kestra."
 body: ""
 videos: []
 createdBy: "Kestra Core Team"
