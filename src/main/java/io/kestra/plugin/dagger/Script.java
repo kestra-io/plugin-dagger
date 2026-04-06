@@ -15,6 +15,7 @@ import lombok.experimental.SuperBuilder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @ToString
@@ -57,6 +58,7 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
         description = "Script content written to a temporary file and piped as stdin to `dagger shell`."
     )
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> script;
 
     @Schema(
@@ -67,6 +69,7 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
             Ignored when using the Process task runner."""
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
 
     @Override

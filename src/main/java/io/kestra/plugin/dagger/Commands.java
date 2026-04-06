@@ -15,6 +15,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @ToString
@@ -65,6 +66,7 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
             (e.g., `|` is passed literally to the Dagger CLI, not interpreted as a shell pipe)."""
     )
     @NotNull
+    @PluginProperty(group = "main")
     private Property<List<String>> commands;
 
     @Schema(
@@ -75,6 +77,7 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
             Ignored when using the Process task runner."""
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     private Property<String> containerImage = Property.ofValue("curlimages/curl:latest");
 
     @Override
