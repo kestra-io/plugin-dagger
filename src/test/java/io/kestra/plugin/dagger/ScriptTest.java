@@ -4,6 +4,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.core.runner.Process;
 import io.kestra.plugin.scripts.exec.scripts.models.ScriptOutput;
 import jakarta.inject.Inject;
@@ -42,6 +43,7 @@ class ScriptTest {
                 """))
             .build();
 
+        runContext = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
         var output = task.run(runContext);
 
         assertThat(output.getExitCode(), is(0));
