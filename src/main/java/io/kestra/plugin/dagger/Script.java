@@ -23,7 +23,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Run a Dagger CLI script.",
+    title = "Run a Dagger CLI script",
     description = """
         Writes the inline script to a temporary file and pipes it as stdin to `dagger shell` \
         via the configured task runner."""

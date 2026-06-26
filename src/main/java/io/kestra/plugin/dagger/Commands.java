@@ -23,7 +23,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Run Dagger CLI pipelines from inline commands.",
+    title = "Run Dagger CLI pipelines from inline commands",
     description = """
         Executes each pipeline using `dagger shell -c '<pipeline>'` via the configured task runner. \
         Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."""
