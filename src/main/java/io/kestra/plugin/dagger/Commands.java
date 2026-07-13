@@ -23,7 +23,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Run Dagger CLI pipelines from inline commands.",
+    title = "Run Dagger CLI pipelines from inline commands",
     description = """
         Executes each pipeline using `dagger shell -c '<pipeline>'` via the configured task runner. \
         Each pipeline string is passed as a single shell-quoted argument to prevent unintended shell interpretation."""
@@ -51,11 +51,30 @@ import io.kestra.core.models.annotations.PluginProperty;
 public class Commands extends AbstractExecScript implements RunnableTask<ScriptOutput> {
 
     /**
+     * The pinned Dagger CLI version to install when not already present on PATH.
+     * Update this constant when a new Dagger release is required.
+     * Using a pinned version prevents supply-chain attacks from unversioned install scripts.
+     */
+    static final String DAGGER_VERSION = "0.18.6";
+
+    /**
      * Commands that install the Dagger CLI if it is not already on PATH.
-     * Expects {@code curl} to be available in the container image.
+     * Uses a pinned version and verifies the downloaded binary via the official checksums file
+     * instead of piping an unversioned install script directly to sh.
+     * Expects {@code curl} and {@code sha256sum} to be available in the container image.
      */
     static final List<String> DAGGER_INSTALL_COMMANDS = List.of(
-        "command -v dagger > /dev/null 2>&1 || curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sh > /dev/null 2>&1"
+        "command -v dagger > /dev/null 2>&1 || (" +
+            "DAGGER_VERSION=" + DAGGER_VERSION + " && " +
+            "ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && " +
+            "DAGGER_ARCHIVE=\"dagger_v${DAGGER_VERSION}_linux_${ARCH}.tar.gz\" && " +
+            "DAGGER_BASE_URL=\"https://dl.dagger.io/dagger/releases/${DAGGER_VERSION}\" && " +
+            "curl -fsSL \"${DAGGER_BASE_URL}/${DAGGER_ARCHIVE}\" -o /tmp/dagger.tar.gz && " +
+            "curl -fsSL \"${DAGGER_BASE_URL}/checksums.txt\" -o /tmp/dagger_checksums.txt && " +
+            "grep \"${DAGGER_ARCHIVE}\" /tmp/dagger_checksums.txt | sha256sum -c - && " +
+            "tar -xzf /tmp/dagger.tar.gz -C /usr/local/bin dagger && " +
+            "rm -f /tmp/dagger.tar.gz /tmp/dagger_checksums.txt" +
+        ")"
     );
 
     @Schema(

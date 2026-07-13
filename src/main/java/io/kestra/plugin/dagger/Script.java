@@ -23,7 +23,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Run a Dagger CLI script.",
+    title = "Run a Dagger CLI script",
     description = """
         Writes the inline script to a temporary file and pipes it as stdin to `dagger shell` \
         via the configured task runner."""
@@ -92,7 +92,9 @@ public class Script extends AbstractExecScript implements RunnableTask<ScriptOut
             .withBeforeCommands(Property.ofValue(Commands.mergedBeforeCommands(this.getBeforeCommands(), runContext)))
             .withBeforeCommandsWithOptions(true)
             .withCommands(Property.ofValue(List.of(
-                "dagger shell < " + scriptFile.toAbsolutePath()
+                // Single-quote the path so that shell metacharacters in the working directory
+                // name (spaces, dollar signs, backticks, etc.) are not interpreted by the shell.
+                "dagger shell < '" + scriptFile.toAbsolutePath().toString().replace("'", "'\\''") + "'"
             )))
             .run();
     }
