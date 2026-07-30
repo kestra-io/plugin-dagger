@@ -2,7 +2,7 @@ group: io.kestra.plugin.dagger
 name: "dagger"
 title: "Dagger"
 description: "Tasks that run Dagger pipelines, commands, and scripts from Kestra."
-body: ""
+body: "Run Dagger CLI pipelines from Kestra using `Commands` for one or more inline pipeline expressions or `Script` for an inline multi-step script. Both run through a script task runner (Process or Docker) and auto-install a pinned, checksum-verified Dagger CLI when it is not already available."
 videos: []
 createdBy: "Kestra Core Team"
 managedBy: "Kestra Core Team"
