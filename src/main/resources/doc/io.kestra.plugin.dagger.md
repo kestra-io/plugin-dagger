@@ -12,4 +12,4 @@ Both tasks default `containerImage` to `curlimages/curl:latest`. When the Dagger
 
 Use `beforeCommands` for setup steps that run before the pipeline, and `env` to pass environment variables. Store credentials such as registry tokens in [secrets](https://kestra.io/docs/concepts/secret) and reference them from `env`.
 
-Apply [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults) to share runner configuration across tasks.
+Set runner configuration on each task.
