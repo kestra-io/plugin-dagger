@@ -28,6 +28,18 @@ class CommandsTest {
     private RunContextFactory runContextFactory;
 
     @Test
+    void installCommandsKeepArchiveNameAndAvoidRootPaths() {
+        var install = String.join(" ", Commands.DAGGER_INSTALL_COMMANDS);
+
+        // sha256sum -c resolves the file by the name listed in checksums.txt, so the archive must keep it
+        assertThat(install.contains("-o \"${DAGGER_DIR}/${DAGGER_ARCHIVE}\""), is(true));
+        // non-root default image cannot write to /usr/local/bin
+        assertThat(install.contains("/usr/local/bin"), is(false));
+        // the PATH export must not live in a subshell or later commands would not see dagger
+        assertThat(install.contains("|| {"), is(true));
+    }
+
+    @Test
     void runCommands() throws Exception {
         var runContext = runContextFactory.of();
         createFakeDagger(runContext);

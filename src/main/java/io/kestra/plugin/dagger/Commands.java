@@ -64,17 +64,21 @@ public class Commands extends AbstractExecScript implements RunnableTask<ScriptO
      * Expects {@code curl} and {@code sha256sum} to be available in the container image.
      */
     static final List<String> DAGGER_INSTALL_COMMANDS = List.of(
-        "command -v dagger > /dev/null 2>&1 || (" +
-            "DAGGER_VERSION=" + DAGGER_VERSION + " && " +
-            "ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && " +
-            "DAGGER_ARCHIVE=\"dagger_v${DAGGER_VERSION}_linux_${ARCH}.tar.gz\" && " +
-            "DAGGER_BASE_URL=\"https://dl.dagger.io/dagger/releases/${DAGGER_VERSION}\" && " +
-            "curl -fsSL \"${DAGGER_BASE_URL}/${DAGGER_ARCHIVE}\" -o /tmp/dagger.tar.gz && " +
-            "curl -fsSL \"${DAGGER_BASE_URL}/checksums.txt\" -o /tmp/dagger_checksums.txt && " +
-            "grep \"${DAGGER_ARCHIVE}\" /tmp/dagger_checksums.txt | sha256sum -c - && " +
-            "tar -xzf /tmp/dagger.tar.gz -C /usr/local/bin dagger && " +
-            "rm -f /tmp/dagger.tar.gz /tmp/dagger_checksums.txt" +
-        ")"
+        // Brace group (not a subshell) so the PATH export is visible to the following commands.
+        // Install into a user-writable dir because the default image runs as a non-root user.
+        "command -v dagger > /dev/null 2>&1 || {" +
+            " DAGGER_VERSION=" + DAGGER_VERSION + " &&" +
+            " ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') &&" +
+            " DAGGER_ARCHIVE=\"dagger_v${DAGGER_VERSION}_linux_${ARCH}.tar.gz\" &&" +
+            " DAGGER_BASE_URL=\"https://dl.dagger.io/dagger/releases/${DAGGER_VERSION}\" &&" +
+            " DAGGER_DIR=$(mktemp -d) &&" +
+            " curl -fsSL \"${DAGGER_BASE_URL}/${DAGGER_ARCHIVE}\" -o \"${DAGGER_DIR}/${DAGGER_ARCHIVE}\" &&" +
+            " curl -fsSL \"${DAGGER_BASE_URL}/checksums.txt\" -o \"${DAGGER_DIR}/checksums.txt\" &&" +
+            // the checksums file references the original archive name, so keep it when verifying
+            " (cd \"${DAGGER_DIR}\" && grep \" ${DAGGER_ARCHIVE}\\$\" checksums.txt | sha256sum -c -) &&" +
+            " tar -xzf \"${DAGGER_DIR}/${DAGGER_ARCHIVE}\" -C \"${DAGGER_DIR}\" dagger &&" +
+            " export PATH=\"${DAGGER_DIR}:${PATH}\";" +
+        " }"
     );
 
     @Schema(
